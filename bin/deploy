@@ -7,7 +7,9 @@ COMMIT="$3"    # commit hash
 
 # Extract app name from repo URL (strip .git, take last path component)
 APP=$(basename -s .git "$REPO")
-source ../.env
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
+
+source $BASE_DIR/.env
 BASE="$DEPLOY_DIR/$APP"
 RELEASES="$BASE/releases"
 CURRENT="$BASE/current"

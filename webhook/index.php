@@ -49,6 +49,7 @@ try {
   $client->post($env['WA_WEBHOOK_URL'], [
       'json' => $postData,
   ]);
+  logMessage("✅ Sent to WhatsApp API");
 } catch (Exception $e) {
   // Handle exception if needed
   logMessage("❌ Error, check logs: " . $e->getMessage());
