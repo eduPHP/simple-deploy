@@ -7,6 +7,8 @@ require_once __DIR__.'/../vendor/autoload.php';
 // Load environment variables from .env file
 $env = parse_ini_file(__DIR__.'/../.env');
 
+echo json_encode($env) . "\n";
+
 // Capture the raw POST body
 $signature = $_SERVER['HTTP_X_DEPLOY_SECRET'] ?? '';
 
