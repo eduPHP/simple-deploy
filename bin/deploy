@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="$1"      # e.g. git@github.com:eduPHP/ai-resume-optimizer.git
+BRANCH="$2"    # e.g. main
+COMMIT="$3"    # commit hash
+
+# Extract app name from repo URL (strip .git, take last path component)
+APP=$(basename -s .git "$REPO")
+if [ -f "../.env" ]; then
+  DEPLOY_DIR=$(grep '^DEPLOY_DIR=' "../.env" | cut -d '=' -f2-)
+  if [ -n "$DEPLOY_DIR" ]; then
+    BASE="$DEPLOY_DIR/$APP"
+    RELEASES="$BASE/releases"
+    CURRENT="$BASE/current"
+  fi
+fi
+
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+NEW_RELEASE="$RELEASES/$TIMESTAMP"
+
+echo "==> Deploying $APP @ $COMMIT ($BRANCH) to $NEW_RELEASE"
+
+mkdir -p "$RELEASES"
+
+# 1. Clone repository at branch
+git clone --branch "$BRANCH" "git@github.com:$REPO.git" "$NEW_RELEASE"
+cd "$NEW_RELEASE"
+
+# 2. Checkout exact commit
+git checkout -q "$COMMIT"
+
+# 3. Install dependencies
+composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
+
+# 4. Link shared files
+if [ -f "$BASE/shared/.env" ]; then
+  ln -sfn "$BASE/shared/.env" "$NEW_RELEASE/.env"
+fi
+
+if [ -d "$BASE/shared/storage" ]; then
+  rm -rf "$NEW_RELEASE/storage"
+  ln -sfn "$BASE/shared/storage" "$NEW_RELEASE/storage"
+fi
+
+# 5. Run Laravel commands
+php artisan migrate --force
+php artisan config:cache
+php artisan view:cache
+php artisan horizon:terminate || true
+
+# 6. Atomic symlink swap
+ln -sfn "$NEW_RELEASE" "$CURRENT"
+
+echo "==> Deploy complete. Now serving $NEW_RELEASE"

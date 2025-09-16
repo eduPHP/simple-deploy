@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_DIR="/home/${USER}/.deploy"
+QUEUE_DIR="$BASE_DIR/queue"
+PROCESS_DIR="$BASE_DIR/processing"
+ARCHIVE_DIR="$BASE_DIR/archive"
+FAILED_DIR="$BASE_DIR/failed"
+LOCKFILE="$BASE_DIR/.deploy.lock"
+LOGFILE="/home/${USER}/.deploy/worker.log"
+NOTIFICATION_WA_GROUP="120363420608302212@g.us"
+
+exec 200>"$LOCKFILE"
+flock -n 200 || exit 0
+
+log() {
+  echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") $*" >>"$LOGFILE"
+  echo "$*"
+}
+
+MAX_PER_RUN=10
+count=0
+
+for src in $QUEUE_DIR/*.json; do
+  [ -e "$src" ] || break
+  ((++count))
+  [ "$count" -gt "$MAX_PER_RUN" ] && break
+  base="$(basename "$src")"
+  proc="$PROCESS_DIR/$base"
+
+  if ! mv "$src" "$proc" 2>/dev/null; then
+    echo "Failed to move $src (race condition)."
+    continue
+  fi
+
+  repo=$(jq -r '.repository // empty' "$proc")
+  ref=$(jq -r '.ref // empty' "$proc")
+  branch="${ref#refs/heads/}"
+  commit=$(jq -r '.commit // empty' "$proc")
+  
+  if [[ -z "$repo" || -z "$branch" || -z "$commit" ]]; then
+    log "Invalid JSON in $proc"
+    mv "$proc" "$FAILED_DIR/$base"
+    continue
+  fi
+
+  log "Deploying $repo $branch $commit"
+  
+  if $BASE_DIR/bin/deploy "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
+    log "Deploy success for $repo@$commit"
+    mv "$proc" "$ARCHIVE_DIR/$base"
+    wa-msg $NOTIFICATION_WA_GROUP "✅ Deploy success: $repo $branch $commit"
+  else
+    log "Deploy failed for $repo@$commit"
+    mv "$proc" "$FAILED_DIR/$base"
+    wa-msg $NOTIFICATION_WA_GROUP "❌ Deploy failed: $repo $branch $commit"
+  fi
+done
