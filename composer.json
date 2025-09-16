@@ -1,0 +1,17 @@
+{
+    "name": "edu/deployer",
+    "description": "Simple deploy script",
+    "type": "project",
+    "autoload": {
+        "psr-4": {}
+    },
+    "authors": [
+        {
+            "name": "Edu",
+            "email": "edu@rdo.blog.br"
+        }
+    ],
+    "require": {
+        "guzzlehttp/guzzle": "^7.10"
+    }
+}
