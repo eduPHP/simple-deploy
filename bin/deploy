@@ -7,15 +7,10 @@ COMMIT="$3"    # commit hash
 
 # Extract app name from repo URL (strip .git, take last path component)
 APP=$(basename -s .git "$REPO")
-if [ -f "../.env" ]; then
-  DEPLOY_DIR=$(grep '^DEPLOY_DIR=' "../.env" | cut -d '=' -f2-)
-  if [ -n "$DEPLOY_DIR" ]; then
-    BASE="$DEPLOY_DIR/$APP"
-    RELEASES="$BASE/releases"
-    CURRENT="$BASE/current"
-  fi
-fi
-
+source ../.env
+BASE="$DEPLOY_DIR/$APP"
+RELEASES="$BASE/releases"
+CURRENT="$BASE/current"
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 NEW_RELEASE="$RELEASES/$TIMESTAMP"
 
