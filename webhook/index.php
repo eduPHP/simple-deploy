@@ -2,10 +2,10 @@
 
 error_reporting(0);
 
-require_once __DIR__.'/../vendor/autoload.php';
+require_once realpath(__DIR__.'/../vendor/autoload.php');
 
 // Load environment variables from .env file
-$env = parse_ini_file(__DIR__.'/../.env');
+$env = parse_ini_file(realpath(__DIR__ . '/../.env'));
 
 // Capture the raw POST body
 $signature = $_SERVER['HTTP_X_DEPLOY_SECRET'] ?? '';
@@ -30,8 +30,8 @@ $postData = [
 ];
 
 // save queue
-$file = __DIR__ . '/../queue/'.$body['commit'].'.txt';
-file_put_contents($file, json_encode($body), FILE_APPEND | LOCK_EX);
+$file = realpath(__DIR__ . '/../queue/'.$body['commit'].'.json');
+file_put_contents($file, json_encode($body), LOCK_EX);
 
 // The data you want to send in the POST request (as an associative array)
 $client = new \GuzzleHttp\Client();
