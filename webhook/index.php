@@ -29,14 +29,15 @@ $postData = [
     'message' => $log,
 ];
 
+// save queue
+$file = __DIR__ . '/../queue/'.$body['commit'].'.txt';
+file_put_contents($file, json_encode($body), FILE_APPEND | LOCK_EX);
+
 // The data you want to send in the POST request (as an associative array)
 $client = new \GuzzleHttp\Client();
 $response = $client->post($env['WA_WEBHOOK_URL'], [
     'json' => $postData,
 ]);
 
-// save queue
-$file = __DIR__ . '/../queue/'.$body['commit'].'.txt';
-file_put_contents($file, json_encode($body), FILE_APPEND | LOCK_EX);
 
 echo $response->getBody()->getContents();
