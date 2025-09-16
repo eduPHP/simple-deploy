@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-source ../.env
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
+
+source "$BASE_DIR/.env"
 QUEUE_DIR="$BASE_DIR/queue"
 PROCESS_DIR="$BASE_DIR/processing"
 ARCHIVE_DIR="$BASE_DIR/archive"
