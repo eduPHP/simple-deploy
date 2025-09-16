@@ -6,3 +6,4 @@
 /queue/*.json
 .env
 worker.log
+worker.lock
