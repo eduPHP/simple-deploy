@@ -1,15 +1,19 @@
 # Project Overview
 
-A simple deployment tool for managing and automating application releases.
+A simple deployment tool for managing and automating application releases. This is basically a poor man's deployer
 
-## Usage
+## Installation
 
-1. Clone the repository.
+1. CLone this repository
+```bash
+git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy
+```
 2. Configure your deployment settings.
-3. Run the deployment command or add to cron/systemd:
-    ```bash
-    /path/to/your/folder/bin/deploy-worker
-    ```
+3. Run the install script
+```bash
+./bin/install.sh
+```
+
 
 ## Roadmap
 
