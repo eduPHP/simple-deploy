@@ -59,6 +59,11 @@ if [ -d "$BASE/shared/storage" ]; then
   ln -sfn "$BASE/shared/storage" "$NEW_RELEASE/storage"
 fi
 
+if [ -d "$BASE/shared/vendor" ]; then
+  rm -rf "$NEW_RELEASE/vendor"
+  ln -sfn "$BASE/shared/vendor" "$NEW_RELEASE/vendor"
+fi
+
 # 5. Run Laravel commands
 if echo "$CHANGED" | grep -qE '^(all|database/)'; then
   echo "==> [$REPO] Migrations changed, running migrate."
