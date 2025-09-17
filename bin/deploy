@@ -35,7 +35,7 @@ cd "$NEW_RELEASE"
 git checkout -q "$COMMIT"
 
 if [ -n "$PREV_COMMIT" ]; then
-  CHANGED=$(git diff --name-only "$COMMIT" "$NEW_COMMIT")
+  CHANGED=$(git diff --name-only "$COMMIT" "$PREV_COMMIT")
 else
   CHANGED="all"
 fi
