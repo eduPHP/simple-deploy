@@ -41,13 +41,7 @@ else
 fi
 
 # 3. Install dependencies
-if echo "$CHANGED" | grep -qE '^(all|composer\.json|composer\.lock)'; then
-  echo "==> [$REPO] Composer changed, installing."
-  composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-else
-  echo "==> [$REPO] No composer changes, skipping install."
-fi
-
+composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
 # 4. Link shared files
 if [ -f "$BASE/shared/.env" ]; then
@@ -57,11 +51,6 @@ fi
 if [ -d "$BASE/shared/storage" ]; then
   rm -rf "$NEW_RELEASE/storage"
   ln -sfn "$BASE/shared/storage" "$NEW_RELEASE/storage"
-fi
-
-if [ -d "$BASE/shared/vendor" ]; then
-  rm -rf "$NEW_RELEASE/vendor"
-  ln -sfn "$BASE/shared/vendor" "$NEW_RELEASE/vendor"
 fi
 
 # 5. Run Laravel commands
