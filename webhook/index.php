@@ -1,6 +1,5 @@
 <?php
-error_reporting(E_ALL);
-
+error_reporting(0);
 
 require_once realpath(__DIR__.'/../vendor/autoload.php');
 
@@ -43,18 +42,20 @@ if (file_put_contents($file, json_encode($body), LOCK_EX)) {
   die;
 }
 
-try {
-  // The data you want to send in the POST request (as an associative array)
-  $client = new \GuzzleHttp\Client();
-  $client->post($env['WA_WEBHOOK_URL'], [
+if($env['WA_WEBHOOK_URL']) {
+  try {
+    $client = new \GuzzleHttp\Client();
+    $client->post($env['WA_WEBHOOK_URL'], [
       'json' => $postData,
-  ]);
-  logMessage("✅ Sent to WhatsApp API");
-} catch (Exception $e) {
-  // Handle exception if needed
-  logMessage("❌ Error, check logs: " . $e->getMessage());
-  http_response_code(500);
-  die;
+    ]);
+    logMessage("✅ Sent to WhatsApp API");
+  } catch (Exception $e) {
+    // Handle exception if needed
+    logMessage("❌ Error, check logs: " . $e->getMessage());
+    http_response_code(500);
+    die;
+  }
 }
+
 echo "🚀 Webhook received\n";
 http_response_code(200);
