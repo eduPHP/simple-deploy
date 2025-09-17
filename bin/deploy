@@ -21,7 +21,7 @@ echo "==> Deploying $APP @ $COMMIT ($BRANCH) to $NEW_RELEASE"
 mkdir -p "$RELEASES"
 
 # Before cloning
-if [ -L "$OLD_RELEASE" ]; then
+if [ -L "$CURRENT" ]; then
   PREV_COMMIT=$(git -C "$CURRENT" rev-parse --short HEAD)
 else
   PREV_COMMIT=""
