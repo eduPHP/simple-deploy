@@ -22,7 +22,7 @@ mkdir -p "$RELEASES"
 
 # Before cloning
 if [ -L "$OLD_RELEASE" ]; then
-  PREV_COMMIT=$(git -C "$CURRENT" rev-parse HEAD)
+  PREV_COMMIT=$(git -C "$CURRENT" rev-parse --short HEAD)
 else
   PREV_COMMIT=""
 fi
