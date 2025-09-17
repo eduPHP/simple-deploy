@@ -20,6 +20,13 @@ echo "==> Deploying $APP @ $COMMIT ($BRANCH) to $NEW_RELEASE"
 
 mkdir -p "$RELEASES"
 
+# Before cloning
+if [ -L "$OLD_RELEASE" ]; then
+  PREV_COMMIT=$(git -C "$CURRENT" rev-parse HEAD)
+else
+  PREV_COMMIT=""
+fi
+
 # 1. Clone repository at branch
 git clone --branch "$BRANCH" "git@github.com:$REPO.git" "$NEW_RELEASE"
 cd "$NEW_RELEASE"
@@ -27,8 +34,20 @@ cd "$NEW_RELEASE"
 # 2. Checkout exact commit
 git checkout -q "$COMMIT"
 
+if [ -n "$PREV_COMMIT" ]; then
+  CHANGED=$(git diff --name-only "$CURRENT_COMMIT" "$NEW_COMMIT")
+else
+  CHANGED="all"
+fi
+
 # 3. Install dependencies
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
+if echo "$CHANGED" | grep -qE '^(all|composer\.json|composer\.lock)'; then
+  echo "==> [$REPO] Composer changed, installing."
+  composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+else
+  echo "==> [$REPO] No composer changes, skipping install."
+fi
+
 
 # 4. Link shared files
 if [ -f "$BASE/shared/.env" ]; then
@@ -41,7 +60,12 @@ if [ -d "$BASE/shared/storage" ]; then
 fi
 
 # 5. Run Laravel commands
-php artisan migrate --force
+if echo "$CHANGED" | grep -qE '^(all|database/)'; then
+  echo "==> [$REPO] Migrations changed, running migrate."
+  php artisan migrate --force
+else
+  echo "==> [$REPO] No database changes, skipping migrate."
+fi
 php artisan config:cache
 php artisan view:cache
 php artisan horizon:terminate || true
