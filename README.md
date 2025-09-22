@@ -42,7 +42,7 @@ server {
     index index.php;
 
     ssl_certificate /home/eduphp/.acme.sh/deployer.example.com_ecc/fullchain.cer;
-    ssl_certificate_key /home/eduphp/.acme.sh/deployer.example.com_ecc/deployer.rdo.blog.br.key;
+    ssl_certificate_key /home/eduphp/.acme.sh/deployer.example.com_ecc/deployer.example.com.key;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;
