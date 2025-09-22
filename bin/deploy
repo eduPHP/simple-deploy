@@ -66,5 +66,6 @@ php artisan horizon:terminate || true
 
 # 6. Atomic symlink swap
 ln -sfn "$NEW_RELEASE" "$CURRENT"
+$BASE_DIR/bin/cleanup "$RELEASES" >>"$LOGFILE" 2>&1;
 
 echo "==> Deploy complete. Now serving $NEW_RELEASE"
