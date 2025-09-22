@@ -41,7 +41,9 @@ else
 fi
 
 # 3. Install dependencies
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+echo "==> [$REPO] installing composer dependencies."
+composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-progress -q
+echo "==> [$REPO] composer dependencies installed."
 
 # 4. Link shared files
 if [ -f "$BASE/shared/.env" ]; then
@@ -60,12 +62,12 @@ if echo "$CHANGED" | grep -qE '^(all|database/)'; then
 else
   echo "==> [$REPO] No database changes, skipping migrate."
 fi
-php artisan config:cache
-php artisan view:cache
-php artisan horizon:terminate || true
+php artisan config:cache --silent
+php artisan view:cache --silent
+php artisan horizon:terminate --silent || true
 
 # 6. Atomic symlink swap
 ln -sfn "$NEW_RELEASE" "$CURRENT"
-$BASE_DIR/bin/cleanup "$RELEASES" >>"$LOGFILE" 2>&1;
+$BASE_DIR/bin/cleanup "$RELEASES"
 
 echo "==> Deploy complete. Now serving $NEW_RELEASE"
