@@ -6,9 +6,12 @@ A simple deployment tool for managing and automating application releases. This 
 
 1. CLone this repository
 ```bash
-git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy
+git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy && cd /var/www/.deploy
 ```
-2. Configure your deployment settings.
+2. Copy and edit the .env settings
+```bash
+cp .env.example .env && nano .env
+```
 3. Run the install script
 ```bash
 ./bin/install.sh
