@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dir="${1:-.}"
+dir="${dir%/}"
+
+cutoff=$(date -d '-5 days' +%Y%m%d)
+for entry in $(ls -d "$dir"/[0-9]* 2>/dev/null); do
+  [[ -d $entry ]] || continue
+  day=$(basename "$entry")
+  day=${day:0:8}
+  if (( day < cutoff )); then
+    echo "Removing release history $entry"
+    rm -rf "$entry"
+  fi
+done
