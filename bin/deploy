@@ -42,7 +42,7 @@ fi
 
 # 3. Install dependencies
 echo "==> [$REPO] installing composer dependencies."
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-progress -q
+composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 echo "==> [$REPO] composer dependencies installed."
 
 # 4. Link shared files
