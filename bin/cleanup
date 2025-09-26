@@ -6,8 +6,8 @@ dir="${dir%/}"
 
 cutoff=$(date -d '-5 days' +%Y%m%d)
 
-# find newest folder (glob + sort)
-latest=$(printf "%s\n" "$dir"/[0-9]* | sort -r | head -n1)
+# find newest 2 folders
+latest_two=$(printf "%s\n" "$dir"/[0-9]* | sort -r | head -n2)
 
 for entry in "$dir"/[0-9]*; do
   [[ -d $entry ]] || continue
@@ -17,8 +17,11 @@ for entry in "$dir"/[0-9]*; do
   if (( day < cutoff )); then
     echo "Removing release history $entry"
     rm -rf "$entry"
-  elif [[ $entry != "$latest" ]]; then
+  elif ! grep -qx "$entry" <<<"$latest_two"; then
     echo "Keeping release history $entry, removing vendor"
     rm -rf "$entry/vendor"
+  else
+    echo "Keeping full release history $entry"
   fi
 done
+
