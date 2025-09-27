@@ -64,10 +64,12 @@ else
 fi
 php artisan config:cache --silent
 php artisan view:cache --silent
-php artisan horizon:terminate --silent || true
 
 # 6. Atomic symlink swap
 ln -sfn "$NEW_RELEASE" "$CURRENT"
+
+php artisan horizon:terminate --silent || true
+
 $BASE_DIR/bin/cleanup "$RELEASES"
 
 echo "==> Deploy complete. Now serving $NEW_RELEASE"
