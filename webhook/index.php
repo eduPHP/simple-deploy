@@ -21,10 +21,13 @@ if ($signature !== $env['DEPLOY_SECRET']) {
 
 $body = json_decode(file_get_contents('php://input'), true);
 
-$message = "✅ Received " . date('Y-m-d H:i:s') . "\n";
-foreach ($body as $key => $value) {
-  $message .= "*{$key}*: {$value}\n";
-}
+$message = "✨ Received " . date('Y-m-d H:i:s') . "\n";
+$message .= "*Commit*: {$body['commit']}\n";
+$message .= "*Built*: {$body['built']}\n";
+
+// foreach ($body as $key => $value) {
+//   $message .= "*{$key}*: {$value}\n";
+// }
 
 $postData = [
     'sessionId' => $env['WA_SESSION_ID'],
