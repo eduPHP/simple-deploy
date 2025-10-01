@@ -14,8 +14,8 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=$USER
-Group=$USER
+User=$DEPLOY_USER
+Group=$DEPLOY_USER
 ExecStart=$BASE_DIR/bin/deploy-worker
 WorkingDirectory=$BASE_DIR
 EOF
@@ -36,6 +36,20 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+cat <<EOF | sudo tee /etc/sudoers.d/10-deploy
+# nginx
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -t
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
+
+# supervisor – restrict to horizon workers
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl reload
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl restart horizon-*
+
+# php-fpm reload if you need it
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/service php8.3-fpm reload
+EOF
+
+sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
 sudo systemctl daemon-reload
 sudo systemctl enable --now deploy-worker.timer
 

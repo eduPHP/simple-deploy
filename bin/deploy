@@ -69,6 +69,8 @@ php artisan view:cache --silent
 ln -sfn "$NEW_RELEASE" "$CURRENT"
 
 php artisan horizon:terminate --silent || true
+/usr/sbin/nginx -s reload
+/usr/bin/supervisorctl restart horizon-$APP
 
 $BASE_DIR/bin/cleanup "$RELEASES"
 
