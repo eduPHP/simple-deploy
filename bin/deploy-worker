@@ -39,6 +39,7 @@ while (( count < MAX_PER_RUN )); do
   fi
 
   log "Deploying $repo $branch $commit"
+  wa-msg "$WA_MESSAGE_JID_TO" "✅ [$APP_NAME] Starting deploy: $repo $branch $commit"
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
     log "Deploy success for $repo@$commit"
