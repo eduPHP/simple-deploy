@@ -6,6 +6,12 @@ BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 source "$BASE_DIR/.env"
 
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
+sudo systemctl disable deploy-worker.timer
+sudo systemctl disable deploy-worker.service
+sudo systemctl stop deploy-worker.timer
+sudo systemctl stop deploy-worker.service
+rm -f /etc/systemd/system/deploy-worker.service
+rm -f /etc/systemd/system/deploy-worker.timer
 
 cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.service
 [Unit]
@@ -47,10 +53,6 @@ $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 # supervisor – restrict to horizon workers
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl reload
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl restart horizon-*
-
-# daemon reloads
-$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
-$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now deploy-worker.timer
 EOF
 
 sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
