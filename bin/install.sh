@@ -6,12 +6,12 @@ BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 source "$BASE_DIR/.env"
 
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
-sudo systemctl disable deploy-worker.timer
-sudo systemctl disable deploy-worker.service
 sudo systemctl stop deploy-worker.timer
 sudo systemctl stop deploy-worker.service
-rm -f /etc/systemd/system/deploy-worker.service
-rm -f /etc/systemd/system/deploy-worker.timer
+sudo systemctl disable deploy-worker.timer
+sudo systemctl disable deploy-worker.service
+sudo rm -f /etc/systemd/system/deploy-worker.service
+sudo rm -f /etc/systemd/system/deploy-worker.timer
 
 cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.service
 [Unit]
