@@ -16,8 +16,13 @@ After=network.target
 Type=oneshot
 User=$DEPLOY_USER
 Group=$DEPLOY_USER
-ExecStart=$BASE_DIR/bin/deploy-worker
 WorkingDirectory=$BASE_DIR
+ExecStart=$BASE_DIR/bin/deploy-worker
+
+# Capture logs in journal
+StandardOutput=journal
+StandardError=journal
+
 EOF
 
 cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.timer
@@ -25,10 +30,8 @@ cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.timer
 Description=Run Deploy Worker every 10 seconds
 
 [Timer]
-# Start 10 seconds after boot
 OnBootSec=10s
-# Repeat every 10 seconds after the service finishes
-OnUnitActiveSec=10s
+OnActiveSec=10s            # runs every 10s no matter what
 Unit=deploy-worker.service
 Persistent=true
 
@@ -52,4 +55,4 @@ EOF
 sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
 sudo systemctl daemon-reload
 sudo systemctl enable --now deploy-worker.timer
-
+systemctl list-timers --all | grep deploy-worker
