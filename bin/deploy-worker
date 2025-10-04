@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 
+BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 source "$BASE_DIR/.env"
-QUEUE_DIR="$BASE_DIR/queue"
-PROCESS_DIR="$BASE_DIR/processing"
-ARCHIVE_DIR="$BASE_DIR/archive"
-FAILED_DIR="$BASE_DIR/failed"
+
 LOCKFILE="$BASE_DIR/.deploy.lock"
 LOGFILE="$BASE_DIR/worker.log"
+REDIS_CLI="redis-cli -u $REDIS_URL"
+QUEUE="deploy:queue"
 
 exec 200>"$LOCKFILE"
 flock -n 200 || exit 0
@@ -23,38 +21,27 @@ log() {
 MAX_PER_RUN=10
 count=0
 
-for src in $QUEUE_DIR/*.json; do
-  [ -e "$src" ] || break
+while (( count < MAX_PER_RUN )); do
+  payload="$($REDIS_CLI LPOP "$QUEUE")" || true
+  [[ -z "$payload" ]] && break
   ((++count))
-  [ "$count" -gt "$MAX_PER_RUN" ] && break
-  base="$(basename "$src")"
-  proc="$PROCESS_DIR/$base"
 
-  if ! mv "$src" "$proc" 2>/dev/null; then
-    echo "Failed to move $src (race condition)."
-    continue
-  fi
+  repo=$(jq -r '.repository // empty' <<<"$payload")
+  branch=$(jq -r '.branch // empty' <<<"$payload")
+  commit=$(jq -r '.commit // empty' <<<"$payload")
 
-  repo=$(jq -r '.repository // empty' "$proc")
-  ref=$(jq -r '.ref // empty' "$proc")
-  branch="${ref#refs/heads/}"
-  commit=$(jq -r '.commit // empty' "$proc")
-  
   if [[ -z "$repo" || -z "$branch" || -z "$commit" ]]; then
-    log "Invalid JSON in $proc"
-    mv "$proc" "$FAILED_DIR/$base"
+    log "Invalid JSON payload: $payload"
     continue
   fi
 
   log "Deploying $repo $branch $commit"
-  
-  if $BASE_DIR/bin/deploy "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
+
+  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
     log "Deploy success for $repo@$commit"
-    mv "$proc" "$ARCHIVE_DIR/$base"
-    wa-msg $WA_MESSAGE_JID_TO "✅ Deploy success: $repo $branch $commit"
+    wa-msg "$WA_MESSAGE_JID_TO" "✅ Deploy success: $repo $branch $commit"
   else
     log "Deploy failed for $repo@$commit"
-    mv "$proc" "$FAILED_DIR/$base"
-    wa-msg $WA_MESSAGE_JID_TO "❌ Deploy failed: $repo $branch $commit"
+    wa-msg "$WA_MESSAGE_JID_TO" "❌ Deploy failed: $repo $branch $commit"
   fi
 done

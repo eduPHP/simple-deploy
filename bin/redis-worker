@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+QUEUE="deploy:queue"
+
+while true; do
+  # BLPOP blocks until something is pushed
+  item=$(redis-cli -p 16379 --raw BLPOP "$QUEUE" 0 | tail -n1)
+  
+  echo "Got job: $item"
+
+  repo=$(jq -r '.repository' <<<"$item")
+  branch=$(jq -r '.branch' <<<"$item")
+  commit=$(jq -r '.commit' <<<"$item")
+
+  echo "$repo"
+  echo "$branch"
+  echo "$commit"
+done
