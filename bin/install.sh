@@ -59,4 +59,5 @@ EOF
 sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
 sudo systemctl daemon-reload
 sudo systemctl enable --now deploy-worker.timer
+sudo systemctl start deploy-worker.service
 systemctl list-timers --all | grep deploy-worker
