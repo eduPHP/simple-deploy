@@ -5,10 +5,11 @@ set -euo pipefail
 BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 source "$BASE_DIR/.env"
 
+APP_NAME=${APP_NAME:-"Server"}
 LOCKFILE="$BASE_DIR/.deploy.lock"
 LOGFILE="$BASE_DIR/worker.log"
 REDIS_CLI="redis-cli -u $REDIS_URL"
-QUEUE="deploy:queue"
+QUEUE=${REDIS_QUEUE:-deploy:queue}
 
 exec 200>"$LOCKFILE"
 flock -n 200 || exit 0
@@ -26,6 +27,8 @@ while (( count < MAX_PER_RUN )); do
   [[ -z "$payload" ]] && break
   ((++count))
 
+  log "Processing payload: $payload"
+
   repo=$(jq -r '.repository // empty' <<<"$payload")
   branch=$(jq -r '.branch // empty' <<<"$payload")
   commit=$(jq -r '.commit // empty' <<<"$payload")
@@ -39,9 +42,9 @@ while (( count < MAX_PER_RUN )); do
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
     log "Deploy success for $repo@$commit"
-    wa-msg "$WA_MESSAGE_JID_TO" "✅ Deploy success: $repo $branch $commit"
+    wa-msg "$WA_MESSAGE_JID_TO" "✅ [$APP_NAME] Deploy success: $repo $branch $commit"
   else
     log "Deploy failed for $repo@$commit"
-    wa-msg "$WA_MESSAGE_JID_TO" "❌ Deploy failed: $repo $branch $commit"
+    wa-msg "$WA_MESSAGE_JID_TO" "❌ [$APP_NAME] Deploy failed: $repo $branch $commit"
   fi
 done
