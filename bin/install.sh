@@ -48,8 +48,9 @@ $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl reload
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl restart horizon-*
 
-# php-fpm reload if you need it
-$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/service php8.3-fpm reload
+# daemon reloads
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now deploy-worker.timer
 EOF
 
 sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
