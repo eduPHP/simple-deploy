@@ -37,12 +37,13 @@ Description=Run Deploy Worker every 10 seconds
 
 [Timer]
 OnBootSec=10s
-OnActiveSec=10s            # runs every 10s no matter what
+OnUnitInactiveSec=10s
 Unit=deploy-worker.service
 Persistent=true
 
 [Install]
 WantedBy=timers.target
+
 EOF
 
 cat <<EOF | sudo tee /etc/sudoers.d/10-deploy
