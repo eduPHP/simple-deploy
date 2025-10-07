@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
 
@@ -17,6 +18,24 @@ flock -n 200 || exit 0
 log() {
   echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") $*" >>"$LOGFILE"
   echo "$*"
+}
+
+notify() {
+  local message="$1"
+
+  if [[ -z "${WA_MESSAGE_JID_TO:-}" ]]; then
+    log "Skipping notification (missing WA_MESSAGE_JID_TO): $message"
+    return 0
+  fi
+
+  if ! command -v wa-msg >/dev/null 2>&1; then
+    log "Skipping notification (wa-msg not found): $message"
+    return 0
+  fi
+
+  if ! wa-msg "$WA_MESSAGE_JID_TO" "$message"; then
+    log "Warning: failed to send WA notification: $message"
+  fi
 }
 
 shutdown() {
@@ -45,13 +64,13 @@ while true; do
   fi
 
   log "Deploying $repo $branch $commit"
-  wa-msg "$WA_MESSAGE_JID_TO" "✅ [$APP_NAME] Starting deploy: $repo $branch $commit"
+  notify "✅ [$APP_NAME] Starting deploy: $repo $branch $commit"
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
     log "Deploy success for $repo@$commit"
-    wa-msg "$WA_MESSAGE_JID_TO" "✅ [$APP_NAME] Deploy success: $repo $branch $commit"
+    notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit"
   else
     log "Deploy failed for $repo@$commit"
-    wa-msg "$WA_MESSAGE_JID_TO" "❌ [$APP_NAME] Deploy failed: $repo $branch $commit"
+    notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit"
   fi
 done
