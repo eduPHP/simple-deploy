@@ -19,13 +19,19 @@ log() {
   echo "$*"
 }
 
-MAX_PER_RUN=10
-count=0
+shutdown() {
+  log "Received shutdown signal, exiting"
+  exit 0
+}
 
-while (( count < MAX_PER_RUN )); do
+trap shutdown SIGINT SIGTERM
+
+while true; do
   payload="$($REDIS_CLI LPOP "$QUEUE")" || true
-  [[ -z "$payload" ]] && break
-  ((++count))
+  if [[ -z "$payload" ]]; then
+    sleep 1
+    continue
+  fi
 
   log "Processing payload: $payload"
 
