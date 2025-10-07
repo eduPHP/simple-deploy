@@ -5,7 +5,6 @@ BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 
 source "$BASE_DIR/.env"
 
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
 sudo systemctl stop deploy-worker.timer || true
 sudo systemctl stop deploy-worker.service || true
 sudo systemctl disable deploy-worker.timer || true

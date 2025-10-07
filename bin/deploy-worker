@@ -8,7 +8,7 @@ source "$BASE_DIR/.env"
 
 APP_NAME=${APP_NAME:-"Server"}
 LOCKFILE="$BASE_DIR/.deploy.lock"
-LOGFILE="$BASE_DIR/worker.log"
+LOGFILE="$BASE_DIR/logs/worker-$(date -u +"%Y-%m-%d").log"
 REDIS_CLI="redis-cli -u $REDIS_URL"
 QUEUE=${REDIS_QUEUE:-deploy:queue}
 
@@ -52,11 +52,10 @@ while true; do
     continue
   fi
 
-  log "Processing payload: $payload"
-
   repo=$(jq -r '.repository // empty' <<<"$payload")
   branch=$(jq -r '.branch // empty' <<<"$payload")
   commit=$(jq -r '.commit // empty' <<<"$payload")
+  DEPLOY_LOG="$BASE_DIR/logs/deploy-$branch-$commit.log"
 
   if [[ -z "$repo" || -z "$branch" || -z "$commit" ]]; then
     log "Invalid JSON payload: $payload"
@@ -66,7 +65,7 @@ while true; do
   log "Deploying $repo $branch $commit"
   notify "✅ [$APP_NAME] Starting deploy: $repo $branch $commit"
 
-  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$LOGFILE" 2>&1; then
+  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$DEPLOY_LOG" 2>&1; then
     log "Deploy success for $repo@$commit"
     notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit"
   else
