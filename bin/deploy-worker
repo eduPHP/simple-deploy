@@ -63,7 +63,7 @@ while true; do
   fi
 
   log "Deploying $repo $branch $commit"
-  notify "✅ [$APP_NAME] Starting deploy: $repo $branch $commit"
+  notify "📦 [$APP_NAME] Starting deploy: $repo $branch $commit"
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$DEPLOY_LOG" 2>&1; then
     log "Deploy success for $repo@$commit"
