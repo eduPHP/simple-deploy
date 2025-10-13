@@ -65,6 +65,8 @@ fi
 php artisan config:cache --silent
 php artisan view:cache --silent
 
+rm -rf "$NEW_RELEASE/.git"
+
 # 6. Atomic symlink swap
 ln -sfn "$NEW_RELEASE" "$CURRENT"
 
