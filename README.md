@@ -1,111 +1,116 @@
 # Project Overview
 
-A simple deployment tool for managing and automating application releases. This is basically a poor man's deployer
+Simple Deploy is a light-weight deployment runner that listens for deploy jobs, checks out the requested commit, and performs the release steps (composer install, artisan caches, Horizon restart, etc.). The `redis-worker` branch introduces a Redis-backed queue and structured logging so you can decouple job ingestion from the worker.
+
+## Requirements
+
+- Git and PHP 8.x with composer on the target host (the deploy script runs `composer install` and Laravel artisan commands)
+- Redis reachable from the worker host plus `redis-cli`
+- `jq` for JSON parsing (used by the worker)
+- Optional: `wa-msg` CLI if you want WhatsApp delivery notifications
 
 ## Installation
 
-1. CLone this repository
+1. Clone the repository onto the deploy box:
+   ```bash
+   git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy
+   cd /var/www/.deploy
+   ```
+2. Copy the example environment file and update the values to fit your infrastructure:
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+3. Run the helper installer (creates directories, permissions, etc.):
+   ```bash
+   ./bin/install.sh
+   ```
+
+## Configuration
+
+Update `.env` with the values that match your environment. Important keys:
+
+- `APP_NAME`: Friendly label that appears in notifications (defaults to `Server`).
+- `DEPLOY_SECRET`: Legacy secret for HTTP producers; keep it if you front this worker with your own webhook.
+- `DEPLOY_DIR`: Base path where releases are created (`/var/www` by default).
+- `DEPLOY_USER`: System user that should own the deployment directories.
+- `REDIS_URL`: Connection string consumed by `redis-cli` (for example `redis://localhost:6379/0`).
+- `REDIS_QUEUE`: Redis list that stores deploy jobs (defaults to `deploy:queue`).
+- `WA_WEBHOOK_URL`, `WA_SESSION_ID`, `WA_MESSAGE_JID_TO`: Optional WhatsApp details; leave blank to disable notifications.
+
+Logs are rotated into `logs/worker-YYYY-MM-DD.log` (worker output) and `logs/deploy-<branch>-<commit>.log` (per deploy run). Ensure the `logs/` directory is writable by the worker user.
+
+## Running the Worker
+
+The worker polls Redis, runs `bin/deploy`, and sends optional WhatsApp updates.
+
 ```bash
-git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy && cd /var/www/.deploy
+./bin/deploy-worker
 ```
-2. Copy and edit the .env settings
+
+You can wrap it in `systemd` (example unit):
+
+```
+[Unit]
+Description=Simple Deploy Worker
+After=network-online.target redis.service
+
+[Service]
+WorkingDirectory=/var/www/.deploy
+ExecStart=/var/www/.deploy/bin/deploy-worker
+Restart=always
+RestartSec=5
+User=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable with:
+
 ```bash
-cp .env.example .env && nano .env
-```
-3. Run the install script
-```bash
-./bin/install.sh
+sudo systemctl enable --now simple-deploy-worker.service
 ```
 
-## How to trigger it?
+## Triggering Deployments
 
-From a webhook that receives the data from a githuib action
+Instead of posting to an HTTP webhook, producers now push JSON payloads onto the Redis list defined by `REDIS_QUEUE`.
 
-### Sample webserver nginx configuration
+### Expected payload
 
-Here is a sample configuration that you can change as you wish
-
-```
-# Minimal working Nginx config for PHP webhook
-
-server {
-    listen 80;
-    server_name deployer.example.com;
-    return 301 https://$host$request_uri;
+```json
+{
+  "repository": "owner/example-app",
+  "branch": "main",
+  "commit": "08da8f1ebf90"
 }
-
-server {
-    listen 443 ssl;
-    server_name deployer.example.com;
-
-    root /var/www/.deploy/webhook;
-    index index.php;
-
-    ssl_certificate /home/eduphp/.acme.sh/deployer.example.com_ecc/fullchain.cer;
-    ssl_certificate_key /home/eduphp/.acme.sh/deployer.example.com_ecc/deployer.example.com.key;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    }
-}
 ```
 
-### Sample github action
-```
-name: Deploy
+- `repository` should be `<owner>/<repo>` (the worker expands it to `git@github.com:<owner>/<repo>.git`).
+- `branch` is the branch name to clone.
+- `commit` is the full commit SHA (will be shorted automatically in logs).
 
-on:
-  push:
-    branches:
-      - main
+### Example GitHub Actions step
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+```yaml
+- name: Queue deploy job
+  env:
+    REDIS_URL: ${{ secrets.DEPLOY_REDIS_URL }}
+  run: |
+    payload=$(jq -n \
+      --arg repository "${{ github.repository }}" \
+      --arg branch "${{ github.ref_name }}" \
+      --arg commit "${{ github.sha }}" \
+      '{repository:$repository, branch:$branch, commit:$commit}')
 
-      - name: Get deploy commit SHA
-        id: deploy_sha
-        run: |
-          short_sha=$(git rev-parse --short=12 HEAD)
-          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Send deploy info
-        env:
-          SECRET: ${{ secrets.DEPLOY_HOOK_SECRET }}
-          URL: ${{ secrets.DEPLOY_HOOK_URL }}
-        run: |
-          body=$(jq -n \
-            --arg repository "${{ github.repository }}" \
-            --arg commit "${{ steps.deploy_sha.outputs.short_sha }}" \
-            --arg ref "${{ github.ref }}" \
-            --arg pusher "${{ github.actor }}" \
-            --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-            --arg built "true" \
-            '{repository:$repository, commit:$commit, ref:$ref, pusher:$pusher, timestamp:$timestamp, built:$built}'
-          )
-          curl -X POST "$URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Deploy-Secret: $SECRET" \
-            -d "$body"
+    redis-cli -u "$REDIS_URL" RPUSH deploy:queue "$payload"
 ```
 
-Note that you must add `DEPLOY_HOOK_SECRET` and `DEPLOY_HOOK_URL` values to your repository's secrets
-
+Match the queue name in the `RPUSH` command to your `REDIS_QUEUE`. Any external producer (cron job, CI pipeline, another service) can enqueue the same JSON document.
 
 ## Roadmap
 
-- [x] Initial deployment script
-- [ ] Add support for multiple environments
-- [ ] Integrate rollback functionality
-- [ ] Improve logging and error handling
-- [ ] Provide a web-based dashboard
+- [x] Redis-backed worker with structured logging
+- [ ] Multiple environment support
+- [ ] Rollback functionality
+- [ ] Improved error reporting dashboards
