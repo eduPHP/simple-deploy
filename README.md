@@ -1,111 +1,106 @@
-# Project Overview
+# Simple Deploy Worker
 
-A simple deployment tool for managing and automating application releases. This is basically a poor man's deployer
+Simple Deploy is a zero-downtime deployment runner tailored for Laravel applications. A Redis-backed worker consumes deploy jobs, checks out the requested commit into a timestamped release directory, runs Composer and artisan tasks, atomically swaps the active symlink, and restarts Horizon together with the supporting services. Logs and housekeeping are handled automatically so the worker can run unattended.
 
-## Installation
+## Features
 
-1. CLone this repository
-```bash
-git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy && cd /var/www/.deploy
-```
-2. Copy and edit the .env settings
-```bash
-cp .env.example .env && nano .env
-```
-3. Run the install script
-```bash
-./bin/install.sh
-```
+- Redis queue (`LPOP`) powered worker with single-instance locking.
+- Laravel release flow: Composer install, shared `.env` and `storage` symlinks, conditional `php artisan migrate`, config/view caches, Horizon restart, and optional WhatsApp alerts.
+- Timestamped release directories with automatic pruning via `bin/cleanup`.
+- Systemd installer (`bin/install.sh`) that provisions the worker service and required sudoers rules.
+- Structured logging: daily worker log plus per-deploy transcripts.
 
-## How to trigger it?
+## Requirements
 
-From a webhook that receives the data from a githuib action
+- Git, PHP 8.x, Composer, and `php artisan` available on the deploy host.
+- Git must be pre confugured to pull from the repository.
+- `redis-cli` reachable to the Redis instance referenced in `.env`.
+- `jq` for JSON parsing inside `bin/deploy-worker`.
+- `sudo` access to install the systemd service and sudoers snippet.
+- Optional: `wa-msg` CLI plus WhatsApp credentials for delivery notifications.
 
-### Sample webserver nginx configuration
+## Setup
 
-Here is a sample configuration that you can change as you wish
+1. Clone the repository onto the deploy machine and enter the directory:
+   ```bash
+   git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy
+   cd /var/www/.deploy
+   ```
+2. Copy the sample environment file and edit it to match your infrastructure:
+   ```bash
+   cp .env.example .env
+   $EDITOR .env
+   ```
+3. Ensure the deploy user can reach the application SSH remotes (deploy key or known host entry).
+4. Create the shared configuration directories for each application that will be deployed. The current deploy script expects:
+   ```
+   ${DEPLOY_DIR}/{app}/shared/.env
+   ${DEPLOY_DIR}/{app}/shared/storage
+   ```
+5. Run the installer to provision the worker service and sudo rules:
+   ```bash
+   ./bin/install.sh
+   ```
 
-```
-# Minimal working Nginx config for PHP webhook
+## Environment Configuration
 
-server {
-    listen 80;
-    server_name deployer.example.com;
-    return 301 https://$host$request_uri;
+All operational settings live in `.env`:
+
+| Key | Purpose |
+| --- | --- |
+| `APP_NAME` | Label appended to log/notification messages. |
+| `DEPLOY_SECRET` | Legacy HTTP secret; keep for compatibility if another producer still uses it. |
+| `DEPLOY_DIR` | Base directory where releases are created (default `/var/www`). |
+| `DEPLOY_USER` | System account that owns deployments and runs the worker. |
+| `REDIS_URL` | Connection string passed to `redis-cli -u` to access the job queue. |
+| `REDIS_QUEUE` | Redis list that stores deploy jobs (`deploy:queue` by default). |
+| `WA_WEBHOOK_URL`, `WA_SESSION_ID`, `WA_MESSAGE_JID_TO` | Optional WhatsApp credentials for the `wa-msg` CLI. Leave blank to disable notifications. |
+
+## Release Layout and Cleanup
+
+Each deploy is checked out to `${DEPLOY_DIR}/{app}/releases/<timestamp>`, and the `current` symlink is atomically updated to point at the newest release. The script links `shared/.env` and `shared/storage` into every release. After a successful deploy, `bin/cleanup` removes releases older than five days and strips the `vendor` directory from older (non-current) releases while keeping the two most recent folders intact.
+
+## Running the Worker
+
+- Manual run: `./bin/deploy-worker`
+- Installed service: `bin/install.sh` creates `/etc/systemd/system/deploy-worker.service` and enables it. Logs are captured by journald and duplicated into `logs/worker-YYYY-MM-DD.log`.
+
+The worker enforces a file lock (`.deploy.lock`) so only one instance processes queue jobs. Each job transcript is written to `logs/deploy-<branch>-<commit>.log`.
+
+## Deployment Flow
+
+Producers push JSON messages onto the Redis list defined by `REDIS_QUEUE`. Expected payload:
+
+```json
+{
+  "repository": "owner/example-app",
+  "branch": "main",
+  "commit": "08da8f1ebf90"
 }
-
-server {
-    listen 443 ssl;
-    server_name deployer.example.com;
-
-    root /var/www/.deploy/webhook;
-    index index.php;
-
-    ssl_certificate /home/eduphp/.acme.sh/deployer.example.com_ecc/fullchain.cer;
-    ssl_certificate_key /home/eduphp/.acme.sh/deployer.example.com_ecc/deployer.example.com.key;
-
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    }
-}
 ```
 
-### Sample github action
-```
-name: Deploy
+- `repository` must be `owner/repo`; the worker expands it to `git@github.com:owner/repo.git`.
+- `branch` is the branch to clone before pinning the commit.
+- `commit` is the full SHA to deploy (it is shortened in logs for readability).
 
-on:
-  push:
-    branches:
-      - main
+Example GitHub Actions step:
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+```yaml
+- name: Queue deploy job
+  env:
+    REDIS_URL: ${{ secrets.DEPLOY_REDIS_URL }}
+  run: |
+    payload=$(jq -n \
+      --arg repository "${{ github.repository }}" \
+      --arg branch "${{ github.ref_name }}" \
+      --arg commit "${{ github.sha }}" \
+      '{repository:$repository, branch:$branch, commit:$commit}')
 
-      - name: Get deploy commit SHA
-        id: deploy_sha
-        run: |
-          short_sha=$(git rev-parse --short=12 HEAD)
-          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Send deploy info
-        env:
-          SECRET: ${{ secrets.DEPLOY_HOOK_SECRET }}
-          URL: ${{ secrets.DEPLOY_HOOK_URL }}
-        run: |
-          body=$(jq -n \
-            --arg repository "${{ github.repository }}" \
-            --arg commit "${{ steps.deploy_sha.outputs.short_sha }}" \
-            --arg ref "${{ github.ref }}" \
-            --arg pusher "${{ github.actor }}" \
-            --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-            --arg built "true" \
-            '{repository:$repository, commit:$commit, ref:$ref, pusher:$pusher, timestamp:$timestamp, built:$built}'
-          )
-          curl -X POST "$URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Deploy-Secret: $SECRET" \
-            -d "$body"
+    redis-cli -u "$REDIS_URL" RPUSH "${REDIS_QUEUE:-deploy:queue}" "$payload"
 ```
 
-Note that you must add `DEPLOY_HOOK_SECRET` and `DEPLOY_HOOK_URL` values to your repository's secrets
+Any CI/CD system or script can enqueue the same document. The worker executes `composer install --no-dev`, runs database migrations when the `database/` directory changes, caches config/views, removes the release `.git` directory, updates the `current` symlink, and restarts Horizon via Supervisor alongside an nginx reload.
 
+## Notifications
 
-## Roadmap
-
-- [x] Initial deployment script
-- [ ] Add support for multiple environments
-- [ ] Integrate rollback functionality
-- [ ] Improve logging and error handling
-- [ ] Provide a web-based dashboard
+If `WA_MESSAGE_JID_TO` is populated and the `wa-msg` CLI is installed, the worker sends start/success/failure notifications. Missing configuration or CLI gracefully downgrades to log-only output.

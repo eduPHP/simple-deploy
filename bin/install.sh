@@ -5,7 +5,12 @@ BASE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 
 source "$BASE_DIR/.env"
 
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts --no-ansi
+sudo systemctl stop deploy-worker.timer || true
+sudo systemctl stop deploy-worker.service || true
+sudo systemctl disable deploy-worker.timer || true
+sudo systemctl disable deploy-worker.service || true
+sudo rm -f /etc/systemd/system/deploy-worker.service || true
+sudo rm -f /etc/systemd/system/deploy-worker.timer || true
 
 cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.service
 [Unit]
@@ -13,27 +18,22 @@ Description=Deploy Worker Job
 After=network.target
 
 [Service]
-Type=oneshot
+Environment="PATH=$PATH"
+Type=simple
 User=$DEPLOY_USER
 Group=$DEPLOY_USER
-ExecStart=$BASE_DIR/bin/deploy-worker
 WorkingDirectory=$BASE_DIR
-EOF
+ExecStart=$BASE_DIR/bin/deploy-worker
+Restart=on-failure
+RestartSec=5
 
-cat <<EOF | sudo tee /etc/systemd/system/deploy-worker.timer
-[Unit]
-Description=Run Deploy Worker every 10 seconds
-
-[Timer]
-# Start 10 seconds after boot
-OnBootSec=10s
-# Repeat every 10 seconds after the service finishes
-OnUnitActiveSec=10s
-Unit=deploy-worker.service
-Persistent=true
+# Capture logs in journal
+StandardOutput=journal
+StandardError=journal
 
 [Install]
-WantedBy=timers.target
+WantedBy=multi-user.target
+
 EOF
 
 cat <<EOF | sudo tee /etc/sudoers.d/10-deploy
@@ -44,12 +44,8 @@ $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 # supervisor – restrict to horizon workers
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl reload
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl restart horizon-*
-
-# php-fpm reload if you need it
-$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/service php8.3-fpm reload
 EOF
 
 sudo visudo -cf /etc/sudoers.d/10-deploy || (echo "ERROR in sudoers file" && exit 1)
 sudo systemctl daemon-reload
-sudo systemctl enable --now deploy-worker.timer
-
+sudo systemctl enable --now deploy-worker.service

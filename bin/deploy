@@ -65,12 +65,15 @@ fi
 php artisan config:cache --silent
 php artisan view:cache --silent
 
+rm -rf "$NEW_RELEASE/.git"
+
 # 6. Atomic symlink swap
 ln -sfn "$NEW_RELEASE" "$CURRENT"
 
+echo "==> [$REPO] Restarting services."
 php artisan horizon:terminate --silent || true
-/usr/sbin/nginx -s reload
-/usr/bin/supervisorctl restart horizon-$APP
+sudo /usr/sbin/nginx -s reload || true
+sudo /usr/bin/supervisorctl restart horizon-$APP || true
 
 $BASE_DIR/bin/cleanup "$RELEASES"
 

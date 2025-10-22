@@ -1,9 +1,4 @@
-/vendor
 /.idea
-/failed/*.json
-/processing/*.json
-/archive/*.json
-/queue/*.json
 .env
-worker.log
-worker.lock
+/logs/*
+.deploy.lock
