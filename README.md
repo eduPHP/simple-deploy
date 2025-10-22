@@ -1,82 +1,75 @@
-# Project Overview
+# Simple Deploy Worker
 
-Simple Deploy is a light-weight deployment runner that listens for deploy jobs, checks out the requested commit, and performs the release steps (composer install, artisan caches, Horizon restart, etc.). The `redis-worker` branch introduces a Redis-backed queue and structured logging so you can decouple job ingestion from the worker.
+Simple Deploy is a zero-downtime deployment runner tailored for Laravel applications. A Redis-backed worker consumes deploy jobs, checks out the requested commit into a timestamped release directory, runs Composer and artisan tasks, atomically swaps the active symlink, and restarts Horizon together with the supporting services. Logs and housekeeping are handled automatically so the worker can run unattended.
+
+## Features
+
+- Redis queue (`LPOP`) powered worker with single-instance locking.
+- Laravel release flow: Composer install, shared `.env` and `storage` symlinks, conditional `php artisan migrate`, config/view caches, Horizon restart, and optional WhatsApp alerts.
+- Timestamped release directories with automatic pruning via `bin/cleanup`.
+- Systemd installer (`bin/install.sh`) that provisions the worker service and required sudoers rules.
+- Structured logging: daily worker log plus per-deploy transcripts.
 
 ## Requirements
 
-- Git and PHP 8.x with composer on the target host (the deploy script runs `composer install` and Laravel artisan commands)
-- Redis reachable from the worker host plus `redis-cli`
-- `jq` for JSON parsing (used by the worker)
-- Optional: `wa-msg` CLI if you want WhatsApp delivery notifications
+- Git, PHP 8.x, Composer, and `php artisan` available on the deploy host.
+- Git must be pre confugured to pull from the repository.
+- `redis-cli` reachable to the Redis instance referenced in `.env`.
+- `jq` for JSON parsing inside `bin/deploy-worker`.
+- `sudo` access to install the systemd service and sudoers snippet.
+- Optional: `wa-msg` CLI plus WhatsApp credentials for delivery notifications.
 
-## Installation
+## Setup
 
-1. Clone the repository onto the deploy box:
+1. Clone the repository onto the deploy machine and enter the directory:
    ```bash
    git clone git@github.com:eduPHP/simple-deploy.git /var/www/.deploy
    cd /var/www/.deploy
    ```
-2. Copy the example environment file and update the values to fit your infrastructure:
+2. Copy the sample environment file and edit it to match your infrastructure:
    ```bash
    cp .env.example .env
-   nano .env
+   $EDITOR .env
    ```
-3. Run the helper installer (creates directories, permissions, etc.):
+3. Ensure the deploy user can reach the application SSH remotes (deploy key or known host entry).
+4. Create the shared configuration directories for each application that will be deployed. The current deploy script expects:
+   ```
+   ${DEPLOY_DIR}/{app}/shared/.env
+   ${DEPLOY_DIR}/{app}/shared/storage
+   ```
+5. Run the installer to provision the worker service and sudo rules:
    ```bash
    ./bin/install.sh
    ```
 
-## Configuration
+## Environment Configuration
 
-Update `.env` with the values that match your environment. Important keys:
+All operational settings live in `.env`:
 
-- `APP_NAME`: Friendly label that appears in notifications (defaults to `Server`).
-- `DEPLOY_SECRET`: Legacy secret for HTTP producers; keep it if you front this worker with your own webhook.
-- `DEPLOY_DIR`: Base path where releases are created (`/var/www` by default).
-- `DEPLOY_USER`: System user that should own the deployment directories.
-- `REDIS_URL`: Connection string consumed by `redis-cli` (for example `redis://localhost:6379/0`).
-- `REDIS_QUEUE`: Redis list that stores deploy jobs (defaults to `deploy:queue`).
-- `WA_WEBHOOK_URL`, `WA_SESSION_ID`, `WA_MESSAGE_JID_TO`: Optional WhatsApp details; leave blank to disable notifications.
+| Key | Purpose |
+| --- | --- |
+| `APP_NAME` | Label appended to log/notification messages. |
+| `DEPLOY_SECRET` | Legacy HTTP secret; keep for compatibility if another producer still uses it. |
+| `DEPLOY_DIR` | Base directory where releases are created (default `/var/www`). |
+| `DEPLOY_USER` | System account that owns deployments and runs the worker. |
+| `REDIS_URL` | Connection string passed to `redis-cli -u` to access the job queue. |
+| `REDIS_QUEUE` | Redis list that stores deploy jobs (`deploy:queue` by default). |
+| `WA_WEBHOOK_URL`, `WA_SESSION_ID`, `WA_MESSAGE_JID_TO` | Optional WhatsApp credentials for the `wa-msg` CLI. Leave blank to disable notifications. |
 
-Logs are rotated into `logs/worker-YYYY-MM-DD.log` (worker output) and `logs/deploy-<branch>-<commit>.log` (per deploy run). Ensure the `logs/` directory is writable by the worker user.
+## Release Layout and Cleanup
+
+Each deploy is checked out to `${DEPLOY_DIR}/{app}/releases/<timestamp>`, and the `current` symlink is atomically updated to point at the newest release. The script links `shared/.env` and `shared/storage` into every release. After a successful deploy, `bin/cleanup` removes releases older than five days and strips the `vendor` directory from older (non-current) releases while keeping the two most recent folders intact.
 
 ## Running the Worker
 
-The worker polls Redis, runs `bin/deploy`, and sends optional WhatsApp updates.
+- Manual run: `./bin/deploy-worker`
+- Installed service: `bin/install.sh` creates `/etc/systemd/system/deploy-worker.service` and enables it. Logs are captured by journald and duplicated into `logs/worker-YYYY-MM-DD.log`.
 
-```bash
-./bin/deploy-worker
-```
+The worker enforces a file lock (`.deploy.lock`) so only one instance processes queue jobs. Each job transcript is written to `logs/deploy-<branch>-<commit>.log`.
 
-You can wrap it in `systemd` (example unit):
+## Deployment Flow
 
-```
-[Unit]
-Description=Simple Deploy Worker
-After=network-online.target redis.service
-
-[Service]
-WorkingDirectory=/var/www/.deploy
-ExecStart=/var/www/.deploy/bin/deploy-worker
-Restart=always
-RestartSec=5
-User=www-data
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable with:
-
-```bash
-sudo systemctl enable --now simple-deploy-worker.service
-```
-
-## Triggering Deployments
-
-Instead of posting to an HTTP webhook, producers now push JSON payloads onto the Redis list defined by `REDIS_QUEUE`.
-
-### Expected payload
+Producers push JSON messages onto the Redis list defined by `REDIS_QUEUE`. Expected payload:
 
 ```json
 {
@@ -86,11 +79,11 @@ Instead of posting to an HTTP webhook, producers now push JSON payloads onto the
 }
 ```
 
-- `repository` should be `<owner>/<repo>` (the worker expands it to `git@github.com:<owner>/<repo>.git`).
-- `branch` is the branch name to clone.
-- `commit` is the full commit SHA (will be shorted automatically in logs).
+- `repository` must be `owner/repo`; the worker expands it to `git@github.com:owner/repo.git`.
+- `branch` is the branch to clone before pinning the commit.
+- `commit` is the full SHA to deploy (it is shortened in logs for readability).
 
-### Example GitHub Actions step
+Example GitHub Actions step:
 
 ```yaml
 - name: Queue deploy job
@@ -103,14 +96,11 @@ Instead of posting to an HTTP webhook, producers now push JSON payloads onto the
       --arg commit "${{ github.sha }}" \
       '{repository:$repository, branch:$branch, commit:$commit}')
 
-    redis-cli -u "$REDIS_URL" RPUSH deploy:queue "$payload"
+    redis-cli -u "$REDIS_URL" RPUSH "${REDIS_QUEUE:-deploy:queue}" "$payload"
 ```
 
-Match the queue name in the `RPUSH` command to your `REDIS_QUEUE`. Any external producer (cron job, CI pipeline, another service) can enqueue the same JSON document.
+Any CI/CD system or script can enqueue the same document. The worker executes `composer install --no-dev`, runs database migrations when the `database/` directory changes, caches config/views, removes the release `.git` directory, updates the `current` symlink, and restarts Horizon via Supervisor alongside an nginx reload.
 
-## Roadmap
+## Notifications
 
-- [x] Redis-backed worker with structured logging
-- [ ] Multiple environment support
-- [ ] Rollback functionality
-- [ ] Improved error reporting dashboards
+If `WA_MESSAGE_JID_TO` is populated and the `wa-msg` CLI is installed, the worker sends start/success/failure notifications. Missing configuration or CLI gracefully downgrades to log-only output.
