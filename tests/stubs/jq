@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+raw_output=0
+if [[ "${1:-}" == "-r" ]]; then
+  raw_output=1
+  shift
+fi
+
+query="${1:-}"
+shift || true
+
+input="$(cat)"
+
+extract() {
+  local key="$1"
+  local value
+  value=$(printf '%s' "$input" | tr -d '\n' | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p")
+  printf '%s' "$value"
+}
+
+case "$query" in
+  '.repository // empty')
+    result=$(extract "repository")
+    ;;
+  '.branch // empty')
+    result=$(extract "branch")
+    ;;
+  '.commit // empty')
+    result=$(extract "commit")
+    ;;
+  *)
+    echo "jq stub unsupported query: $query" >&2
+    exit 1
+    ;;
+esac
+
+if [[ $raw_output -eq 1 ]]; then
+  printf '%s\n' "$result"
+else
+  printf '"%s"\n' "$result"
+fi

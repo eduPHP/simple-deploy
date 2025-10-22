@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_DIR="${TEST_PROJECT_ROOT:-$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd ../.. && pwd )}"
+LOG_DIR="$BASE_DIR/logs"
+mkdir -p "$LOG_DIR"
+
+recipient=${1:-}
+shift || true
+message="$*"
+
+echo "$recipient|$message" >>"$LOG_DIR/notifications.log"

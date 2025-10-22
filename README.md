@@ -104,3 +104,20 @@ Any CI/CD system or script can enqueue the same document. The worker executes `c
 ## Notifications
 
 If `WA_MESSAGE_JID_TO` is populated and the `wa-msg` CLI is installed, the worker sends start/success/failure notifications. Missing configuration or CLI gracefully downgrades to log-only output.
+
+## Testing
+
+The repository includes a Docker-backed [Bats](https://bats-core.readthedocs.io/) suite that exercises the deploy worker against stubbed dependencies.
+
+Prerequisites:
+
+- Docker daemon running locally.
+- `bats` available on your `PATH` (install with `brew install bats-core` or the package manager of your choice).
+
+Execute the tests from the project root:
+
+```bash
+bats tests/deploy_worker.bats
+```
+
+The suite builds a throwaway `deploy-worker-test` image, boots the worker inside the container, and verifies success, failure, and invalid payload handling via fake Redis, Composer, and Artisan commands. All artifacts are written to temporary directories under the test harness.

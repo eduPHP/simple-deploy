@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+QUEUE_ROOT="${QUEUE_DIR:-/tmp/redis-queue}"
+
+if [[ "${1:-}" == "-u" ]]; then
+  shift 2 || true
+fi
+
+command=${1:-}
+shift || true
+
+case "$command" in
+  LPOP)
+    queue="${1:-}"
+    [[ -n "$queue" ]] || exit 0
+    file="$QUEUE_ROOT/${queue}.queue"
+    if [[ ! -f "$file" ]]; then
+      exit 0
+    fi
+    if [[ ! -s "$file" ]]; then
+      : >"$file"
+      exit 0
+    fi
+    head -n1 "$file"
+    if (( $(wc -l <"$file") > 1 )); then
+      tail -n +2 "$file" >"$file.tmp"
+      mv "$file.tmp" "$file"
+    else
+      : >"$file"
+    fi
+    ;;
+  RPUSH)
+    queue="${1:-}"
+    shift || true
+    file="$QUEUE_ROOT/${queue}.queue"
+    mkdir -p "$(dirname "$file")"
+    for payload in "$@"; do
+      echo "$payload" >>"$file"
+    done
+    ;;
+  *)
+    echo "redis-cli stub unsupported command: $command $*" >&2
+    exit 1
+    ;;
+esac
