@@ -18,8 +18,9 @@ for entry in "$dir"/[0-9]*; do
     echo "Removing release history $entry"
     rm -rf "$entry"
   elif ! grep -qx "$entry" <<<"$latest_two"; then
-    echo "Keeping release history $entry, removing vendor"
+    echo "Keeping release history $entry"
     rm -rf "$entry/vendor"
+    rm -rf "$entry/.git"
   else
     echo "Keeping full release history $entry"
   fi
