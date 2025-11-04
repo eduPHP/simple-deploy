@@ -70,8 +70,7 @@ ln -sfn "$NEW_RELEASE" "$CURRENT"
 
 echo "==> [$REPO] Restarting services."
 php artisan horizon:terminate --silent || true
-sudo /usr/sbin/nginx -s reload || true
-sudo /usr/bin/systemctl reload caddy || true
+sudo systemctl restart php8.4-fpm caddy nginx || true
 sudo /usr/bin/supervisorctl restart horizon-$APP || true
 
 $BASE_DIR/bin/cleanup "$RELEASES"

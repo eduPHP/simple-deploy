@@ -43,7 +43,7 @@ $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/sbin/nginx -s reload
 
 # supervisor – restrict to horizon workers
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl reload
-$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload caddy
+$DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart php8.4-fpm caddy nginx
 $DEPLOY_USER ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl restart horizon-*
 EOF
 
