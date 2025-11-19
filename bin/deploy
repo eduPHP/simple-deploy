@@ -73,14 +73,11 @@ php artisan horizon:terminate --silent || true
 sudo systemctl restart php8.4-fpm caddy nginx || true
 sudo /usr/bin/supervisorctl restart horizon-$APP || true
 
-if echo "$CHANGED" | grep -qE '^resources/(js|css|sass|ts|vue|views|userscripts)'; then
-  if [ ! -f "$NEW_RELEASE/public/build/manifest.json" ]; then
-    echo "==> [$REPO] Building javascript."
-    npm i
-    npm run build
-  fi
+if [ ! -f "$NEW_RELEASE/public/build/manifest.json" ]; then
+  echo "==> [$REPO] Building javascript."
+  npm i
+  npm run build
 fi
-
 
 $BASE_DIR/bin/cleanup "$RELEASES"
 
