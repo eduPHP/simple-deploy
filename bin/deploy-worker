@@ -33,9 +33,7 @@ notify() {
     return 0
   fi
 
-  if ! wa-msg "$WA_MESSAGE_JID_TO" "$message"; then
-    log "Warning: failed to send WA notification: $message"
-  fi
+  nohup wa-msg "$WA_MESSAGE_JID_TO" "$message" >/dev/null 2>&1 &
 }
 
 shutdown() {
