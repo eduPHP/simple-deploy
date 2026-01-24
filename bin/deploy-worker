@@ -22,6 +22,7 @@ log() {
 
 notify() {
   local message="$1"
+  shift
   local notify_cmd="$BASE_DIR/bin/notify"
 
   if [[ -z "${TELEGRAM_CHAT_ID:-}" ]]; then
@@ -34,7 +35,7 @@ notify() {
     return 0
   fi
 
-  nohup "$notify_cmd" "$TELEGRAM_CHAT_ID" "$message" >/dev/null 2>&1 &
+  nohup "$notify_cmd" "$TELEGRAM_CHAT_ID" "$message" "$@" >/dev/null 2>&1 &
 }
 
 shutdown() {
@@ -66,9 +67,9 @@ while true; do
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$DEPLOY_LOG" 2>&1; then
     log "Deploy success for $repo@$commit"
-    notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file "$DEPLOY_LOG"
+    notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file $DEPLOY_LOG
   else
     log "Deploy failed for $repo@$commit"
-    notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit" --file "$DEPLOY_LOG"
+    notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit" --file $DEPLOY_LOG
   fi
 done
