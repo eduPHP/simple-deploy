@@ -23,17 +23,17 @@ log() {
 notify() {
   local message="$1"
 
-  if [[ -z "${WA_MESSAGE_JID_TO:-}" ]]; then
-    log "Skipping notification (missing WA_MESSAGE_JID_TO): $message"
+  if [[ -z "${TELEGRAM_CHAT_ID:-}" ]]; then
+    log "Skipping notification (missing TELEGRAM_CHAT_ID): $message"
     return 0
   fi
 
-  if ! command -v wa-msg >/dev/null 2>&1; then
-    log "Skipping notification (wa-msg not found): $message"
+  if ! command -v ./notify >/dev/null 2>&1; then
+    log "Skipping notification (notify not found): $message"
     return 0
   fi
 
-  nohup wa-msg "$WA_MESSAGE_JID_TO" "$message" >/dev/null 2>&1 &
+  nohup ./notify "$TELEGRAM_CHAT_ID" "$message" >/dev/null 2>&1 &
 }
 
 shutdown() {
@@ -65,9 +65,9 @@ while true; do
 
   if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$DEPLOY_LOG" 2>&1; then
     log "Deploy success for $repo@$commit"
-    notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit"
+    notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file "$DEPLOY_LOG"
   else
     log "Deploy failed for $repo@$commit"
-    notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit"
+    notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit" --file "$DEPLOY_LOG"
   fi
 done

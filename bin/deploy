@@ -40,43 +40,23 @@ else
   CHANGED="all"
 fi
 
-# 3. Install dependencies
-echo "==> [$REPO] installing composer dependencies."
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-echo "==> [$REPO] composer dependencies installed."
-
-# 4. Link shared files
-if [ -f "$BASE/shared/.env" ]; then
-  ln -sfn "$BASE/shared/.env" "$NEW_RELEASE/.env"
-fi
-
-if [ -d "$BASE/shared/storage" ]; then
-  rm -rf "$NEW_RELEASE/storage"
-  ln -sfn "$BASE/shared/storage" "$NEW_RELEASE/storage"
-fi
-
-# 5. Run Laravel commands
-if echo "$CHANGED" | grep -qE '^(all|database/)'; then
-  echo "==> [$REPO] Migrations changed, running migrate."
-  php artisan migrate --force
+## run project deployment steps here
+if [ -d ".deploy" ]; then
+  shopt -s nullglob
+  RUN_SCRIPTS=(.deploy/*.run.sh)
+  if [ ${#RUN_SCRIPTS[@]} -gt 0 ]; then
+    echo "==> Running project scripts (.deploy/*.run.sh)"
+    for SCRIPT in "${RUN_SCRIPTS[@]}"; do
+      echo "==> Running $SCRIPT"
+      # Source to preserve parent context (env + vars)
+      . "$SCRIPT"
+    done
+  else
+    echo "==> No project scripts found (.deploy/*.run.sh)"
+  fi
+  shopt -u nullglob
 else
-  echo "==> [$REPO] No database changes, skipping migrate."
-fi
-php artisan config:cache --silent
-php artisan view:cache --silent
-
-# 6. Atomic symlink swap
-ln -sfn "$NEW_RELEASE" "$CURRENT"
-
-echo "==> [$REPO] Restarting services."
-php artisan horizon:terminate --silent || true
-sudo systemctl restart php8.4-fpm caddy nginx || true
-sudo /usr/bin/supervisorctl restart horizon-$APP || true
-
-if [ ! -f "$NEW_RELEASE/public/build/manifest.json" ]; then
-  echo "==> [$REPO] Building javascript."
-  npm i
-  npm run build
+  echo "==> No .deploy directory found"
 fi
 
 $BASE_DIR/bin/cleanup "$RELEASES"

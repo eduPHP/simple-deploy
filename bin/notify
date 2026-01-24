@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source /home/edu/.env
+
+if [ $# -lt 2 ]; then
+  echo "Usage: wa-msg {jid} {message...} [--file path]" >&2
+  exit 1
+fi
+
+JID="$1"
+#7587036582
+CHAT_ID="$1"
+shift
+
+FILE_PATH=""
+MESSAGE_PARTS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --file)
+      shift
+      FILE_PATH="${1:-}"
+      ;;
+    *)
+      MESSAGE_PARTS+=("$1")
+      ;;
+  esac
+  shift || true
+done
+
+MESSAGE="${MESSAGE_PARTS[*]}"
+
+# Escape MESSAGE for JSON safely
+JSON_MESSAGE=$(printf '%s' "$MESSAGE" | jq -R .)
+
+TOKEN="$TELEGRAM_DEPLOY_BOT"
+URL="https://api.telegram.org/bot$TOKEN/sendMessage"
+DOC_URL="https://api.telegram.org/bot$TOKEN/sendDocument"
+
+
+if [[ -n "$FILE_PATH" && -f "$FILE_PATH" ]]; then
+  curl -s -X POST "$DOC_URL" -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" -F caption="$MESSAGE" >> /home/edu/logs/telegram-notify.log 2>&1
+else
+    curl -s -X POST $URL -d chat_id=$CHAT_ID -d text="$MESSAGE" >> /home/edu/logs/telegram-notify.log 2>&1
+fi
