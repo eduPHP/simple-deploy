@@ -22,18 +22,19 @@ log() {
 
 notify() {
   local message="$1"
+  local notify_cmd="$BASE_DIR/bin/notify"
 
   if [[ -z "${TELEGRAM_CHAT_ID:-}" ]]; then
     log "Skipping notification (missing TELEGRAM_CHAT_ID): $message"
     return 0
   fi
 
-  if ! command -v ./notify >/dev/null 2>&1; then
+  if [[ ! -x "$notify_cmd" ]]; then
     log "Skipping notification (notify not found): $message"
     return 0
   fi
 
-  nohup ./notify "$TELEGRAM_CHAT_ID" "$message" >/dev/null 2>&1 &
+  nohup "$notify_cmd" "$TELEGRAM_CHAT_ID" "$message" >/dev/null 2>&1 &
 }
 
 shutdown() {
