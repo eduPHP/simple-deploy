@@ -19,6 +19,7 @@ for entry in "$dir"/[0-9]*; do
     rm -rf "$entry"
   elif ! grep -qx "$entry" <<<"$latest_two"; then
     echo "Keeping release history $entry"
+    rm -rf "$entry/node_modules"
     rm -rf "$entry/vendor"
     rm -rf "$entry/.git"
   else
