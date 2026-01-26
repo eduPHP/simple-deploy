@@ -65,7 +65,7 @@ while true; do
   log "Deploying $repo $branch $commit"
   notify "📦 [$APP_NAME] Starting deploy: $repo $branch $commit"
 
-  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" >>"$DEPLOY_LOG" 2>&1; then
+  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" 2>&1 | sed -r 's/\x1B\[[0-9;]*[[:alpha:]]//g' >>"$DEPLOY_LOG"; then
     log "Deploy success for $repo@$commit"
     notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file $DEPLOY_LOG
   else
