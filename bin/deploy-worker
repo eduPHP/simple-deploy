@@ -12,6 +12,8 @@ LOGFILE="$BASE_DIR/logs/worker-$(date -u +"%Y-%m-%d").log"
 REDIS_CLI="redis-cli -u $REDIS_URL"
 QUEUE=${REDIS_QUEUE:-deploy:queue}
 
+mkdir -p "$BASE_DIR/logs"
+
 exec 200>"$LOCKFILE"
 flock -n 200 || exit 0
 
@@ -45,6 +47,13 @@ shutdown() {
 
 trap shutdown SIGINT SIGTERM
 
+sanitize_for_filename() {
+  local value="$1"
+  value="${value//\//-}"
+  value="${value//[^A-Za-z0-9._-]/-}"
+  echo "$value"
+}
+
 while true; do
   payload="$($REDIS_CLI LPOP "$QUEUE")" || true
   if [[ -z "$payload" ]]; then
@@ -55,21 +64,39 @@ while true; do
   repo=$(jq -r '.repository // empty' <<<"$payload")
   branch=$(jq -r '.branch // empty' <<<"$payload")
   commit=$(jq -r '.commit // empty' <<<"$payload")
-  DEPLOY_LOG="$BASE_DIR/logs/deploy-$branch-$commit.log"
 
   if [[ -z "$repo" || -z "$branch" || -z "$commit" ]]; then
     log "Invalid JSON payload: $payload"
     continue
   fi
 
+  safe_branch="$(sanitize_for_filename "$branch")"
+  safe_commit="$(sanitize_for_filename "$commit")"
+  DEPLOY_LOG="$BASE_DIR/logs/deploy-$safe_branch-$safe_commit.log"
+
   log "Deploying $repo $branch $commit"
+  log "Deploy log: $DEPLOY_LOG"
   notify "📦 [$APP_NAME] Starting deploy: $repo $branch $commit"
 
-  if "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" 2>&1 | sed -r 's/\x1B\[[0-9;]*[[:alpha:]]//g' >>"$DEPLOY_LOG"; then
+  set +e
+  "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" 2>&1 \
+    | sed -r 's/\x1B\[[0-9;]*[[:alpha:]]//g' >>"$DEPLOY_LOG"
+  status=$?
+  set -e
+
+  if [[ $status -eq 0 ]]; then
     log "Deploy success for $repo@$commit"
     notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file $DEPLOY_LOG
   else
-    log "Deploy failed for $repo@$commit"
+    log "Deploy failed for $repo@$commit (exit $status)"
+    if [[ -s "$DEPLOY_LOG" ]]; then
+      log "Last 200 lines from $DEPLOY_LOG:"
+      tail -n 200 "$DEPLOY_LOG" | while IFS= read -r line; do
+        log "  $line"
+      done
+    else
+      log "Deploy log is empty; check worker stdout/stderr for earlier errors."
+    fi
     notify "❌ [$APP_NAME] Deploy failed: $repo $branch $commit" --file $DEPLOY_LOG
   fi
 done
