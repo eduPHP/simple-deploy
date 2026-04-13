@@ -28,7 +28,11 @@ else
 fi
 
 # 1. Clone repository at branch
-git clone --branch "$BRANCH" "git@github.com:$REPO.git" "$NEW_RELEASE"
+# BatchMode=yes prevents interactive SSH prompts (hangs if host key changed or auth fails)
+# ConnectTimeout=10 fails fast on TCP-level hangs; StrictHostKeyChecking=accept-new
+# auto-accepts new hosts but rejects changed keys (safer than StrictHostKeyChecking=no)
+export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new'
+timeout 120 git clone --branch "$BRANCH" "git@github.com:$REPO.git" "$NEW_RELEASE"
 cd "$NEW_RELEASE"
 
 # 2. Checkout exact commit
@@ -46,10 +50,11 @@ if [ -d ".deploy" ]; then
   RUN_SCRIPTS=(.deploy/*.run.sh)
   if [ ${#RUN_SCRIPTS[@]} -gt 0 ]; then
     echo "==> Running project scripts (.deploy/*.run.sh)"
+    # Export variables so subprocess scripts inherit the deploy context
+    export BASE_DIR APP NEW_RELEASE CURRENT CHANGED RELEASES TIMESTAMP BASE DEPLOY_DIR
     for SCRIPT in "${RUN_SCRIPTS[@]}"; do
       echo "==> Running $SCRIPT"
-      # Source to preserve parent context (env + vars)
-      . "$SCRIPT"
+      timeout "${SCRIPT_TIMEOUT:-300}" bash "$SCRIPT"
     done
   else
     echo "==> No project scripts found (.deploy/*.run.sh)"
