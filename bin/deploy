@@ -50,11 +50,10 @@ if [ -d ".deploy" ]; then
   RUN_SCRIPTS=(.deploy/*.run.sh)
   if [ ${#RUN_SCRIPTS[@]} -gt 0 ]; then
     echo "==> Running project scripts (.deploy/*.run.sh)"
-    # Export variables so subprocess scripts inherit the deploy context
-    export BASE_DIR APP NEW_RELEASE CURRENT CHANGED RELEASES TIMESTAMP BASE DEPLOY_DIR
     for SCRIPT in "${RUN_SCRIPTS[@]}"; do
       echo "==> Running $SCRIPT"
-      timeout "${SCRIPT_TIMEOUT:-300}" bash "$SCRIPT"
+      # Source to preserve parent context (env + vars)
+      . "$SCRIPT"
     done
   else
     echo "==> No project scripts found (.deploy/*.run.sh)"
