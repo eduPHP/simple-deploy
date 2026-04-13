@@ -28,10 +28,9 @@ else
 fi
 
 # 1. Clone repository at branch
-# BatchMode=yes prevents interactive SSH prompts (hangs if host key changed or auth fails)
-# ConnectTimeout=10 fails fast on TCP-level hangs; StrictHostKeyChecking=accept-new
-# auto-accepts new hosts but rejects changed keys (safer than StrictHostKeyChecking=no)
-export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new'
+# BatchMode=yes prevents SSH from prompting (would hang indefinitely waiting for input)
+# ConnectTimeout=10 fails fast on TCP-level hangs instead of waiting for OS timeout
+export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10'
 timeout 120 git clone --branch "$BRANCH" "git@github.com:$REPO.git" "$NEW_RELEASE"
 cd "$NEW_RELEASE"
 

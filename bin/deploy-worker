@@ -68,6 +68,7 @@ while true; do
 
   if [[ -z "$repo" || -z "$branch" || -z "$commit" ]]; then
     log "Invalid JSON payload: $payload"
+    sleep 1
     continue
   fi
 
