@@ -11,6 +11,7 @@ LOCKFILE="$BASE_DIR/.deploy.lock"
 LOGFILE="$BASE_DIR/logs/worker-$(date -u +"%Y-%m-%d").log"
 REDIS_CLI="redis-cli -u $REDIS_URL"
 QUEUE=${REDIS_QUEUE:-deploy:queue}
+DEPLOY_TIMEOUT=${DEPLOY_TIMEOUT:-600}
 
 mkdir -p "$BASE_DIR/logs"
 
@@ -79,14 +80,23 @@ while true; do
   notify "📦 [$APP_NAME] Starting deploy: $repo $branch $commit"
 
   set +e
-  "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" 2>&1 \
+  timeout "$DEPLOY_TIMEOUT" "$BASE_DIR/bin/deploy" "$repo" "$branch" "$commit" 2>&1 \
     | sed -r 's/\x1B\[[0-9;]*[[:alpha:]]//g' >>"$DEPLOY_LOG"
-  status=$?
+  status=${PIPESTATUS[0]}
   set -e
 
   if [[ $status -eq 0 ]]; then
     log "Deploy success for $repo@$commit"
     notify "✅ [$APP_NAME] Deploy success: $repo $branch $commit" --file $DEPLOY_LOG
+  elif [[ $status -eq 124 ]]; then
+    log "Deploy timed out for $repo@$commit (exceeded ${DEPLOY_TIMEOUT}s)"
+    if [[ -s "$DEPLOY_LOG" ]]; then
+      log "Last 200 lines from $DEPLOY_LOG:"
+      tail -n 200 "$DEPLOY_LOG" | while IFS= read -r line; do
+        log "  $line"
+      done
+    fi
+    notify "⏰ [$APP_NAME] Deploy timed out: $repo $branch $commit" --file $DEPLOY_LOG
   else
     log "Deploy failed for $repo@$commit (exit $status)"
     if [[ -s "$DEPLOY_LOG" ]]; then
